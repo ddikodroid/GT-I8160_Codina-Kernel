@@ -38,7 +38,6 @@ echo "Copy modules to initramfs"
 		echo -e "\n\n Copying Modules to InitRamFS Folder...\n\n"
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/fs
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/fs/cifs
-		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/fs/ntfs
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/fs/fuse
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/kernel
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/kernel/drivers/bluetooth/bthid
@@ -48,7 +47,6 @@ echo "Copy modules to initramfs"
 		mkdir -p $INITRAMFSDIR/lib/modules/2.6.35.7/kernel/drivers/scsi
 
 		cp fs/cifs/cifs.ko $INITRAMFSDIR/lib/modules/2.6.35.7/fs/cifs/cifs.ko
-		cp fs/ntfs/ntfs.ko $INITRAMFSDIR/lib/modules/2.6.35.7/fs/ntfs/ntfs.ko
 		cp fs/fuse/fuse.ko $INITRAMFSDIR/lib/modules/2.6.35.7/fs/fuse/fuse.ko
 		cp drivers/bluetooth/bthid/bthid.ko $INITRAMFSDIR/lib/modules/2.6.35.7/kernel/drivers/bluetooth/bthid/bthid.ko
 		cp drivers/net/wireless/bcm4330/dhd.ko $INITRAMFSDIR/lib/modules/2.6.35.7/kernel/drivers/net/wireless/bcm4330/dhd.ko
