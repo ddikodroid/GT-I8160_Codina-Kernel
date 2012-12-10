@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.14
-# Mon Dec 10 06:58:13 2012
+# Mon Dec 10 08:04:10 2012
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -79,8 +79,11 @@ CONFIG_CGROUPS=y
 # CONFIG_CPUSETS is not set
 CONFIG_CGROUP_CPUACCT=y
 # CONFIG_RESOURCE_COUNTERS is not set
-# CONFIG_CGROUP_SCHED is not set
+CONFIG_CGROUP_SCHED=y
+CONFIG_FAIR_GROUP_SCHED=y
+# CONFIG_RT_GROUP_SCHED is not set
 # CONFIG_BLK_CGROUP is not set
+CONFIG_SCHED_AUTOGROUP=y
 # CONFIG_SYSFS_DEPRECATED_V2 is not set
 CONFIG_RELAY=y
 # CONFIG_NAMESPACES is not set
