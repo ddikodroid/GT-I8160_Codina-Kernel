@@ -67,12 +67,12 @@ on boot
 service ueventd /sbin/ueventd
     critical
 
-service console /system/bin/sh
+service console /sbin/busybox sh
     console
 
 service recovery /sbin/recovery
 
-service adbd /sbin/adbd-recovery recovery
+service adbd /sbin/adbd recovery
     disabled
 
 on property:persist.service.adb.enable=1
