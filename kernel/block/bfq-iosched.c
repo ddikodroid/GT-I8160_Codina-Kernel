@@ -122,8 +122,8 @@ static DEFINE_IDA(cic_index_ida);
 				{ RB_ROOT, RB_ROOT, NULL, NULL, 0, 0 })
 
 #define RQ_CIC(rq)		\
-	((struct cfq_io_context *) (rq)->elevator_private)
-#define RQ_BFQQ(rq)		((rq)->elevator_private2)
+	((struct cfq_io_context *) (rq)->elevator_private[0])
+#define RQ_BFQQ(rq)		((rq)->elevator_private[1])
 
 #include "bfq-ioc.c"
 #include "bfq-sched.c"
@@ -142,7 +142,7 @@ static DEFINE_IDA(cic_index_ida);
  */
 static inline int bfq_bio_sync(struct bio *bio)
 {
-	if (bio_data_dir(bio) == READ || (bio->bi_rw & BIO_RW_SYNCIO))
+	if (bio_data_dir(bio) == READ || (bio->bi_rw & REQ_SYNC))
 		return 1;
 
 	return 0;
@@ -158,13 +158,6 @@ static inline void bfq_schedule_dispatch(struct bfq_data *bfqd)
 		bfq_log(bfqd, "schedule dispatch");
 		kblockd_schedule_work(bfqd->queue, &bfqd->unplug_work);
 	}
-}
-
-static inline int bfq_queue_empty(struct request_queue *q)
-{
-	struct bfq_data *bfqd = q->elevator->elevator_data;
-
-	return bfqd->queued == 0;
 }
 
 /*
@@ -192,9 +185,9 @@ static struct request *bfq_choose_req(struct bfq_data *bfqd,
 		return rq1;
 	else if (rq_is_sync(rq2) && !rq_is_sync(rq1))
 		return rq2;
-	if ((rq1->cmd_flags) && !(rq2->cmd_flags))
+	if ((rq1->cmd_flags & REQ_META) && !(rq2->cmd_flags & REQ_META))
 		return rq1;
-	else if ((rq2->cmd_flags) && !(rq1->cmd_flags))
+	else if ((rq2->cmd_flags & REQ_META) && !(rq1->cmd_flags & REQ_META))
 		return rq2;
 
 	s1 = blk_rq_pos(rq1);
@@ -507,8 +500,9 @@ add_bfqq_busy:
                 if(bfqd->low_latency && old_raising_coeff == 1 &&
 			!rq_is_sync(rq) &&
 			bfqq->last_rais_start_finish +
-                        bfqd->bfq_raising_min_idle_time < jiffies) {
+                        bfqd->bfq_raising_min_inter_arr_async < jiffies) {
                         bfqq->raising_coeff = bfqd->bfq_raising_coeff;
+			bfqq->raising_cur_max_time = bfqd->bfq_raising_max_time;
 
 			entity->ioprio_changed = 1;
 			bfq_log_bfqq(bfqd, bfqq,
@@ -587,7 +581,7 @@ static void bfq_remove_request(struct request *rq)
 	list_del_init(&rq->queuelist);
 	bfq_del_rq_rb(rq);
 
-	if (rq->cmd_flags) {
+	if (rq->cmd_flags & REQ_META) {
 		WARN_ON(bfqq->meta_pending == 0);
 		bfqq->meta_pending--;
 	}
@@ -707,23 +701,12 @@ static inline sector_t bfq_dist_from_last(struct bfq_data *bfqd,
  * bfqd->last_position, or if rq is closer to bfqd->last_position than
  * bfqq->next_rq
  */
-static inline int bfq_rq_close(struct bfq_data *bfqd, struct bfq_queue *bfqq,
-			       struct request *rq)
+static inline int bfq_rq_close(struct bfq_data *bfqd, struct request *rq)
 {
-	sector_t sdist = bfqq->seek_mean;
-
-	if (!bfq_sample_valid(bfqq->seek_samples))
-		sdist = BFQQ_SEEK_THR;
-
-	/* If seek_mean is large, using it as close criteria is meaningless */
-	if (sdist > BFQQ_SEEK_THR)
-		sdist = BFQQ_SEEK_THR;
-
-	return bfq_dist_from_last(bfqd, rq) <= sdist;
+	return bfq_dist_from_last(bfqd, rq) <= BFQQ_SEEK_THR;
 }
 
-static struct bfq_queue *bfqq_close(struct bfq_data *bfqd,
-				    struct bfq_queue *cur_bfqq)
+static struct bfq_queue *bfqq_close(struct bfq_data *bfqd)
 {
 	struct rb_root *root = &bfqd->rq_pos_tree;
 	struct rb_node *parent, *node;
@@ -747,7 +730,7 @@ static struct bfq_queue *bfqq_close(struct bfq_data *bfqd,
 	 * position).
 	 */
 	__bfqq = rb_entry(parent, struct bfq_queue, pos_node);
-	if (bfq_rq_close(bfqd, cur_bfqq, __bfqq->next_rq))
+	if (bfq_rq_close(bfqd, __bfqq->next_rq))
 		return __bfqq;
 
 	if (blk_rq_pos(__bfqq->next_rq) < sector)
@@ -758,7 +741,7 @@ static struct bfq_queue *bfqq_close(struct bfq_data *bfqd,
 		return NULL;
 
 	__bfqq = rb_entry(node, struct bfq_queue, pos_node);
-	if (bfq_rq_close(bfqd, cur_bfqq, __bfqq->next_rq))
+	if (bfq_rq_close(bfqd, __bfqq->next_rq))
 		return __bfqq;
 
 	return NULL;
@@ -794,7 +777,7 @@ static struct bfq_queue *bfq_close_cooperator(struct bfq_data *bfqd,
 	 * working closely on the same area of the disk. In that case,
 	 * we can group them together and don't waste time idling.
 	 */
-	bfqq = bfqq_close(bfqd, cur_bfqq);
+	bfqq = bfqq_close(bfqd);
 	if (bfqq == NULL || bfqq == cur_bfqq)
 		return NULL;
 
@@ -842,6 +825,26 @@ static inline unsigned long bfq_min_budget(struct bfq_data *bfqd)
 		bfqd->bfq_max_budget / 32;
 }
 
+/*
+ * Decides whether idling should be done for given device and
+ * given active queue.
+ */
+static inline bool bfq_queue_nonrot_noidle(struct bfq_data *bfqd,
+					   struct bfq_queue *active_bfqq)
+{
+	if (active_bfqq == NULL)
+		return false;
+	/*
+	 * If device is SSD it has no seek penalty, disable idling; but
+	 * do so only if:
+	 * - device does not support queuing, otherwise we still have
+	 *   a problem with sync vs async workloads;
+	 * - the queue is not weight-raised, to preserve guarantees.
+	 */
+	return (blk_queue_nonrot(bfqd->queue) && bfqd->hw_tag &&
+		active_bfqq->raising_coeff == 1);
+}
+
 static void bfq_arm_slice_timer(struct bfq_data *bfqd)
 {
 	struct bfq_queue *bfqq = bfqd->active_queue;
@@ -849,6 +852,9 @@ static void bfq_arm_slice_timer(struct bfq_data *bfqd)
 	unsigned long sl;
 
 	WARN_ON(!RB_EMPTY_ROOT(&bfqq->sort_list));
+
+	if (bfq_queue_nonrot_noidle(bfqd, bfqq))
+		return;
 
 	/* Idling is disabled, either manually or by past process history. */
 	if (bfqd->bfq_slice_idle == 0 || !bfq_bfqq_idle_window(bfqq))
@@ -954,7 +960,7 @@ static int bfqq_process_refs(struct bfq_queue *bfqq)
 	int process_refs, io_refs;
 
 	io_refs = bfqq->allocated[READ] + bfqq->allocated[WRITE];
-	process_refs = atomic_read(&bfqq->ref) - io_refs;
+	process_refs = atomic_read(&bfqq->ref) - io_refs - bfqq->entity.on_st;
 	BUG_ON(process_refs < 0);
 	return process_refs;
 }
@@ -1482,7 +1488,8 @@ static struct bfq_queue *bfq_select_queue(struct bfq_data *bfqd)
 	 * then keep it.
 	 */
 	if (new_bfqq == NULL && (timer_pending(&bfqd->idle_slice_timer) ||
-		(bfqq->dispatched != 0 && bfq_bfqq_idle_window(bfqq)))) {
+		(bfqq->dispatched != 0 && bfq_bfqq_idle_window(bfqq) &&
+		 !bfq_queue_nonrot_noidle(bfqd, bfqq)))) {
 		bfqq = NULL;
 		goto keep_queue;
 	} else if (new_bfqq != NULL && timer_pending(&bfqd->idle_slice_timer)) {
@@ -2096,7 +2103,7 @@ static void bfq_rq_enqueued(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 {
 	struct cfq_io_context *cic = RQ_CIC(rq);
 
-	if (rq->cmd_flags)
+	if (rq->cmd_flags & REQ_META)
 		bfqq->meta_pending++;
 
 	bfq_update_io_thinktime(bfqd, cic);
@@ -2115,10 +2122,10 @@ static void bfq_rq_enqueued(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 	if (bfqq == bfqd->active_queue) {
 		/*
 		 * If there is just this request queued and the request
-		 * is small, just make sure the queue is plugged and exit.
+		 * is small, just exit.
 		 * In this way, if the disk is being idled to wait for a new
 		 * request from the active queue, we avoid unplugging the
-		 * device for this request.
+		 * device now.
 		 *
 		 * By doing so, we spare the disk to be committed
 		 * to serve just a small request. On the contrary, we wait for
@@ -2129,7 +2136,6 @@ static void bfq_rq_enqueued(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 		 */
 	        if (bfqq->queued[rq_is_sync(rq)] == 1 &&
 		    blk_rq_sectors(rq) < 32) {
-			blk_plug_device(bfqd->queue);
 		        return;
 		}
 		if (bfq_bfqq_wait_request(bfqq)) {
@@ -2173,6 +2179,9 @@ static void bfq_update_hw_tag(struct bfq_data *bfqd)
 {
 	bfqd->max_rq_in_driver = max(bfqd->max_rq_in_driver,
 				     bfqd->rq_in_driver);
+
+	if (bfqd->hw_tag == 1)
+		return;
 
 	/*
 	 * This sample is valid if the number of outstanding requests
@@ -2323,8 +2332,8 @@ static void bfq_put_request(struct request *rq)
 
 		put_io_context(RQ_CIC(rq)->ioc);
 
-		rq->elevator_private = NULL;
-		rq->elevator_private2 = NULL;
+		rq->elevator_private[0] = NULL;
+		rq->elevator_private[1] = NULL;
 
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "put_request %p, %d",
 			     bfqq, bfqq->ref);
@@ -2425,8 +2434,8 @@ new_queue:
 
 	spin_unlock_irqrestore(q->queue_lock, flags);
 
-	rq->elevator_private = cic;
-	rq->elevator_private2 = bfqq;
+	rq->elevator_private[0] = cic;
+	rq->elevator_private[1] = bfqq;
 
 	return 0;
 
@@ -2645,7 +2654,7 @@ static void *bfq_init_queue(struct request_queue *q)
 	INIT_LIST_HEAD(&bfqd->active_list);
 	INIT_LIST_HEAD(&bfqd->idle_list);
 
-	bfqd->hw_tag = 1;
+	bfqd->hw_tag = -1;
 
 	bfqd->bfq_max_budget = bfq_default_max_budget;
 
@@ -2666,6 +2675,7 @@ static void *bfq_init_queue(struct request_queue *q)
 	bfqd->bfq_raising_rt_max_time = msecs_to_jiffies(300);
 	bfqd->bfq_raising_max_time = msecs_to_jiffies(7500);
 	bfqd->bfq_raising_min_idle_time = msecs_to_jiffies(2000);
+	bfqd->bfq_raising_min_inter_arr_async = msecs_to_jiffies(500);
 	bfqd->bfq_raising_max_softrt_rate = 7000;
 
 	return bfqd;
@@ -2768,6 +2778,9 @@ SHOW_FUNCTION(bfq_raising_max_time_show, bfqd->bfq_raising_max_time, 1);
 SHOW_FUNCTION(bfq_raising_rt_max_time_show, bfqd->bfq_raising_rt_max_time, 1);
 SHOW_FUNCTION(bfq_raising_min_idle_time_show, bfqd->bfq_raising_min_idle_time,
 	1);
+SHOW_FUNCTION(bfq_raising_min_inter_arr_async_show,
+	      bfqd->bfq_raising_min_inter_arr_async,
+	      1);
 SHOW_FUNCTION(bfq_raising_max_softrt_rate_show,
 	bfqd->bfq_raising_max_softrt_rate, 0);
 #undef SHOW_FUNCTION
@@ -2810,6 +2823,8 @@ STORE_FUNCTION(bfq_raising_rt_max_time_store, &bfqd->bfq_raising_rt_max_time, 0,
 		INT_MAX, 1);
 STORE_FUNCTION(bfq_raising_min_idle_time_store,
 	       &bfqd->bfq_raising_min_idle_time, 0, INT_MAX, 1);
+STORE_FUNCTION(bfq_raising_min_inter_arr_async_store,
+	       &bfqd->bfq_raising_min_inter_arr_async, 0, INT_MAX, 1);
 STORE_FUNCTION(bfq_raising_max_softrt_rate_store,
 	       &bfqd->bfq_raising_max_softrt_rate, 0, INT_MAX, 0);
 #undef STORE_FUNCTION
@@ -2903,6 +2918,7 @@ static struct elv_fs_entry bfq_attrs[] = {
 	BFQ_ATTR(raising_max_time),
 	BFQ_ATTR(raising_rt_max_time),
 	BFQ_ATTR(raising_min_idle_time),
+	BFQ_ATTR(raising_min_inter_arr_async),
 	BFQ_ATTR(raising_max_softrt_rate),
 	BFQ_ATTR(weights),
 	__ATTR_NULL
@@ -2918,7 +2934,6 @@ static struct elevator_type iosched_bfq = {
 		.elevator_add_req_fn =		bfq_insert_request,
 		.elevator_activate_req_fn =	bfq_activate_request,
 		.elevator_deactivate_req_fn =	bfq_deactivate_request,
-		.elevator_queue_empty_fn =	bfq_queue_empty,
 		.elevator_completed_req_fn =	bfq_completed_request,
 		.elevator_former_req_fn =	elv_rb_former_request,
 		.elevator_latter_req_fn =	elv_rb_latter_request,
