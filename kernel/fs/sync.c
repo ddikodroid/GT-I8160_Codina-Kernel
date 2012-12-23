@@ -20,10 +20,6 @@
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
 
-#ifdef CONFIG_FSYNC_CONTROL
-extern bool fsynccontrol_fsync_enabled();
-#endif
-
 /*
  * Do the filesystem syncing work. For simple filesystems
  * writeback_inodes_sb(sb) just dirties buffers with inodes so we have to
@@ -132,6 +128,13 @@ void emergency_sync(void)
 	}
 }
 
+#ifdef CONFIG_FILE_SYNC_DISABLE
+static inline int do_fsync(unsigned int fd, int datasync)
+{
+  	return 0;
+}
+#else /* !CONFIG_FILE_SYNC_DISABLE */
+
 /*
  * Generic function to fsync a file.
  */
@@ -173,11 +176,6 @@ int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 	struct address_space *mapping = file->f_mapping;
 	int err, ret;
 
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	if (!file->f_op || !file->f_op->fsync) {
 		ret = -EINVAL;
 		goto out;
@@ -200,6 +198,20 @@ out:
 }
 EXPORT_SYMBOL(vfs_fsync_range);
 
+static int do_fsync(unsigned int fd, int datasync)
+{
+  struct file *file;
+  int ret = -EBADF;
+
+  file = fget(fd);
+  if (file) {
+    ret = vfs_fsync(file, datasync);
+    fput(file);
+  }
+  return ret;
+}
+#endif /* CONFIG_FILE_SYNC_DISABLE */
+
 /**
  * vfs_fsync - perform a fsync or fdatasync on a file
  * @file:		file to sync
@@ -210,50 +222,17 @@ EXPORT_SYMBOL(vfs_fsync_range);
  */
 int vfs_fsync(struct file *file, int datasync)
 {
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	return vfs_fsync_range(file, 0, LLONG_MAX, datasync);
 }
 EXPORT_SYMBOL(vfs_fsync);
 
-static int do_fsync(unsigned int fd, int datasync)
-{
-	struct file *file;
-	int ret = -EBADF;
-
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
-	file = fget(fd);
-	if (file) {
-		ret = vfs_fsync(file, datasync);
-		fput(file);
-	}
-	return ret;
-}
-
 SYSCALL_DEFINE1(fsync, unsigned int, fd)
 {
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	return do_fsync(fd, 0);
 }
 
 SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
 {
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	return do_fsync(fd, 1);
 }
 
@@ -267,17 +246,20 @@ SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
  */
 int generic_write_sync(struct file *file, loff_t pos, loff_t count)
 {
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	if (!(file->f_flags & O_DSYNC) && !IS_SYNC(file->f_mapping->host))
 		return 0;
 	return vfs_fsync_range(file, pos, pos + count - 1,
 			       (file->f_flags & __O_SYNC) ? 0 : 1);
 }
 EXPORT_SYMBOL(generic_write_sync);
+
+#ifdef CONFIG_FILE_SYNC_DISABLE
+SYSCALL_DEFINE(sync_file_range)(int fd, loff_t offset, loff_t nbytes,
+        unsigned int flags)
+{
+  return 0;
+}
+#else /* !CONFIG_FILE_SYNC_DISABLE */
 
 /*
  * sys_sync_file_range() permits finely controlled syncing over a segment of
@@ -335,11 +317,6 @@ SYSCALL_DEFINE(sync_file_range)(int fd, loff_t offset, loff_t nbytes,
 	loff_t endbyte;			/* inclusive */
 	int fput_needed;
 	umode_t i_mode;
-
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
 
 	ret = -EINVAL;
 	if (flags & ~VALID_FLAGS)
@@ -414,6 +391,8 @@ out_put:
 out:
 	return ret;
 }
+#endif /* CONFIG_FILE_SYNC_DISABLE */
+
 #ifdef CONFIG_HAVE_SYSCALL_WRAPPERS
 asmlinkage long SyS_sync_file_range(long fd, loff_t offset, loff_t nbytes,
 				    long flags)

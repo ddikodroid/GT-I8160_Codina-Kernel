@@ -324,6 +324,12 @@ config CPU_FREQ_DEFAULT_GOV_LULZACTIVEQ
 	select CPU_FREQ_GOV_LULZACTIVEQ
 	help
 
+config CPU_FREQ_DEFAULT_GOV_SKYWALKER
+	bool "skywalker"
+	select CPU_FREQ_GOV_SKYWALKER
+	help
+	  Use the CPUFreq governor 'skywalker' as default.
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -658,8 +664,13 @@ config CPU_FREQ_GOV_LULZACTIVEQ
         help
           'lulzactiveq' - hotplug mechanism added in lulzactive
 
-config CPU_FREQ_GOV_SLP
-	tristate "'slp' cpufreq policy governor"
+config CPU_FREQ_GOV_SKYWALKER
+	tristate "'skywalker' cpufreq governor"
+	depends on CPU_FREQ
+	help
+          'skywalker' - a "SavagedZen" based smart and smooth optimized governor!
+ 
+	  If in doubt, say Y.
 
 config CPU_FREQ_MIN_TICKS
 	int "Ticks between governor polling interval."

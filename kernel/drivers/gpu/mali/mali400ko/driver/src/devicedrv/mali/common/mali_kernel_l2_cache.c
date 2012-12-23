@@ -88,7 +88,7 @@ typedef struct mali_kernel_l2_cache_core
 } mali_kernel_l2_cache_core;
 
 
-#define MALI400_L2_MAX_READS_DEFAULT 0x1C
+#define MALI400_L2_MAX_READS_DEFAULT 0x30
 
 int mali_l2_max_reads = MALI400_L2_MAX_READS_DEFAULT;
 

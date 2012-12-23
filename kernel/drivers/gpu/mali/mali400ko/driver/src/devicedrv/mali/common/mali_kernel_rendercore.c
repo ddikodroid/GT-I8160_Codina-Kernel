@@ -34,7 +34,7 @@
 
 #define WATCHDOG_MSECS_MIN (2*HANG_CHECK_MSECS_MIN)
 #define WATCHDOG_MSECS_MAX 3600000 /* 1 hour */
-#define WATCHDOG_MSECS_DEFAULT 900000 /* 15 mins */
+#define WATCHDOG_MSECS_DEFAULT 5000 /* 15 mins */
 
 /* max value that will be converted from jiffies to msecs and written to job->render_time_msecs */
 #define JOB_MAX_JIFFIES 100000

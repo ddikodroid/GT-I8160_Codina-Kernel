@@ -868,7 +868,7 @@ config CC_OPTIMIZE_ALOT
 	  resulting in a large sized kernel, fully optimized.
 
 config CC_OPTIMIZE_FAST
-	bool "Use -O4"
+	bool "Use -Ofast"
 	help
 	  Enabling this option will pass "-O3" instead of "-Os" or "-O2" or "-O3" to gcc
 	  resulting in a large sized kernel, speed optimized.

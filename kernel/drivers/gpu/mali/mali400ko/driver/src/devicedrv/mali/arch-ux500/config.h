@@ -24,7 +24,7 @@
 
 #define MEGABYTE (1024*1024)
 #define MALI_MEM_BASE (128 * MEGABYTE)
-#define MALI_MEM_SIZE ( 32 * MEGABYTE)
+#define MALI_MEM_SIZE ( 64 * MEGABYTE)
 #define OS_MEM_SIZE   (1024 * MEGABYTE)
 
 /* Hardware revision u8500 v1: GX570-BU-00000-r0p1

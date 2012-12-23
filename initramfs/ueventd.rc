@@ -126,4 +126,4 @@
 # modem storage pipe
 /dev/rpc                  0600   radio      radio
 
-/sys/devices/platform/musb-hdrc.0/usb* uevent 0660 root usb
+/sys/devices/platform/musb-hdrc.0/usb1 uevent 0660 root usb
