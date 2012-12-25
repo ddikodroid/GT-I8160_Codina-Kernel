@@ -998,9 +998,6 @@ service sysinit /system/bin/logwrapper /system/xbin/busybox run-parts /system/et
     disabled
     oneshot
 
-#BB install
-    exec /sbin/bbinstall.sh
-
 ## for LogMeIn
     service RescueStarter /system/bin/RescueStarter 
     user graphics
