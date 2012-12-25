@@ -59,10 +59,10 @@ static unsigned int enabled = 0;
 #define DEFAULT_MIN_SAMPLE_TIME 50000;
 static unsigned long min_sample_time;
 
-#define FREQ_THRESHOLD 1000000;
+#define FREQ_THRESHOLD 800000;
 static unsigned int freq_threshld;
 
-#define RESUME_SPEED 1000000;
+#define RESUME_SPEED 800000;
 static unsigned int resum_speed;
 
 static int cpufreq_governor_interactivex(struct cpufreq_policy *policy,
@@ -77,7 +77,7 @@ struct cpufreq_governor cpufreq_gov_interactivex = {
 #if defined(CONFIG_ARCH_MSM_SCORPION)
        .max_transition_latency = 8000000,
 #else
-       .max_transition_latency = 10000000,
+       .max_transition_latency = 8000000,
 #endif
        .owner = THIS_MODULE,
 };
