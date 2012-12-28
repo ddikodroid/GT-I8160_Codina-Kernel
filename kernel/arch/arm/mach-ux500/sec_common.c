@@ -182,20 +182,6 @@ static __init int setup_boot_mode(char *opt)
 
 __setup("bootmode=", setup_boot_mode);
 
-#if defined(CONFIG_MACH_JANICE_CHN) || (CONFIG_MACH_GAVINI) \
-	 || (CONFIG_MACH_GAVINI_CHN)
-u32 sec_lpm_bootmode;
-EXPORT_SYMBOL(sec_lpm_bootmode);
-
-static __init int setup_lpm_boot_mode(char *opt)
-{
-	sec_lpm_bootmode = (u32) memparse(opt, &opt);
-	return 0;
-}
-
-__setup("lpm_boot=", setup_lpm_boot_mode);
-#endif
-
 u32 set_default_param;
 EXPORT_SYMBOL(set_default_param);
 
