@@ -38,7 +38,7 @@ static unsigned int dyn_hotplug = 0;
  */
 
 #define DEF_FREQUENCY_UP_THRESHOLD		(70)
-#define DEF_FREQUENCY_DOWN_THRESHOLD		(30)
+#define DEF_FREQUENCY_DOWN_THRESHOLD		(35)
 
 /*
  * The polling frequency of this governor depends on the capability of
@@ -338,7 +338,7 @@ static void aggressivex_suspend(int suspend)
                 for_each_cpu(cpu, &tmp_mask) {
                   pcpu = &per_cpu(cs_cpu_dbs_info, cpu);
                   smp_rmb();
-                  __cpufreq_driver_target(pcpu->cur_policy, 1200000, CPUFREQ_RELATION_L); //this value should NEVER go under 1200000
+                  __cpufreq_driver_target(pcpu->cur_policy, 800000, CPUFREQ_RELATION_L); //this value should NEVER go under 800000
                 }
                 mutex_unlock(&dbs_mutex);
                 pr_info("[HOTPLUGGING] aggressiveX: Device woken, CPU1 up\n");
@@ -488,8 +488,8 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 				CPUFREQ_RELATION_H);
 		return;
 	}
-	if (max_load < 85 && this_dbs_info->requested_freq == 1200000)	
-		__cpufreq_driver_target(policy, 1060000,
+	if (max_load < 85 && this_dbs_info->requested_freq == 800000)	
+		__cpufreq_driver_target(policy, 800000,
 				CPUFREQ_RELATION_H);
 	/* Debugging Stuff 
 	* pr_info("Load: %d \n", max_load);
@@ -600,7 +600,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 
 			min_sampling_rate = 10000;
-			dbs_tuners_ins.sampling_rate = 10000;
+			dbs_tuners_ins.sampling_rate = 20000;
 
 			cpufreq_register_notifier(
 					&dbs_cpufreq_notifier_block,
